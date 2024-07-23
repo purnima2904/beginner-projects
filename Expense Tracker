@@ -1,0 +1,448 @@
+import javax.swing.*;
+import java.awt.*;
+import java.io.*;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.List;
+
+class Transaction {
+    String type;
+    double amount;
+    Date date;
+
+    public Transaction(String type, double amount, Date date) {
+        this.type = type;
+        this.amount = amount;
+        this.date = date;
+    }
+}
+
+class ExpenseTracker {
+    List<Transaction> transactions;
+    double totalIncome;
+    double totalExpense;
+    Map<String, Double> budget;
+    String userName;
+    String userEmail;
+
+    public ExpenseTracker() {
+        transactions = new ArrayList<>();
+        budget = new HashMap<>();
+    }
+
+    public void addIncome(double amount, String source, Date date) {
+        totalIncome += amount;
+        transactions.add(new Transaction("Income - " + source, amount, date));
+    }
+
+    public void updateIncome(int index, double newAmount) {
+        if (index >= 0 && index < transactions.size()) {
+            Transaction transaction = transactions.get(index);
+            if (transaction.amount > 0) {
+                totalIncome -= transaction.amount;
+                totalIncome += newAmount;
+                transaction.amount = newAmount;
+            }
+        }
+    }
+
+    public void addExpense(String category, double amount, Date date) {
+        double remainingBudget = getRemainingBudget(category);
+        if (amount > remainingBudget * 0.8) { // Alert if expense exceeds 80% of the remaining budget
+            JLabel warningLabel = new JLabel("WARNING: You are nearing your budget limit for category '" + category + "'.");
+            warningLabel.setForeground(Color.RED);
+            JOptionPane.showMessageDialog(null, warningLabel, "Budget Warning", JOptionPane.WARNING_MESSAGE);
+        }
+        totalExpense += amount;
+        transactions.add(new Transaction("Expense - " + category, -amount, date));
+    }
+
+    private double getRemainingBudget(String category) {
+        Double budgetAmount = budget.get(category);
+        double spentAmount = calculateSpentAmountForCategory(category);
+
+        // Calculate and return the remaining budget
+        return budgetAmount - spentAmount;
+
+    }
+
+    private double calculateSpentAmountForCategory(String category) {
+        double spentAmount = 0;
+        for (Transaction transaction : transactions) {
+            if (transaction.type.startsWith("Expense - " + category)) {
+                spentAmount += Math.abs(transaction.amount); // Sum the absolute value of expenses
+            }
+        }
+        return spentAmount;
+    }
+    public void deleteTransaction(int index) {
+        if (index >= 0 && index < transactions.size()) {
+            Transaction deletedTransaction = transactions.remove(index);
+            if (deletedTransaction.amount > 0) {
+                totalIncome -= deletedTransaction.amount;
+            } else {
+                totalExpense += deletedTransaction.amount;
+            }
+        }
+    }
+
+    public String getSummary() {
+        return "Total Income: Rs." + totalIncome + "\nTotal Expense: Rs." + totalExpense + "\nBalance: Rs." + (totalIncome - totalExpense);
+    }
+
+    public void setBudget(String category, double budgetAmount) {
+        budget.put(category, budgetAmount);
+    }
+
+    public void importData(String filePath) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            List<Transaction> importedTransactions = new ArrayList<>(); // Temporary list to hold imported transactions
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 3) {
+                    String type = parts[0];
+                    double amount = Double.parseDouble(parts[1]);
+                    Date date = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy").parse(parts[2]);
+                    importedTransactions.add(new Transaction(type, amount, date));
+                }
+            }
+            transactions.addAll(importedTransactions); // Add imported transactions to the existing list
+        } catch (IOException | NumberFormatException | java.text.ParseException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void setUserDetails(String name, String email) {
+        this.userName = name;
+        this.userEmail = email;
+    }
+
+    public String getUserDetails() {
+        return "User Name: " + userName + "\nUser Email: " + userEmail;
+    }
+
+    public void exportDataToCSV(String filePath) {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(filePath))) {
+            writer.println("User Name,User Email");
+            writer.println(userName + "," + userEmail);
+            writer.println();
+            writer.println("Type,Amount,Date");
+            for (Transaction transaction : transactions) {
+                writer.println(transaction.type + "," + transaction.amount + "," + transaction.date);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class ExpenseTrackerApp extends JFrame {
+    private ExpenseTracker expenseTracker;
+    private JTextArea displayArea;
+    private JComboBox<String> categoryComboBox;
+
+    public ExpenseTrackerApp() {
+        expenseTracker = new ExpenseTracker();
+        displayArea = new JTextArea(30, 30);
+        displayArea.setEditable(false);
+        categoryComboBox = new JComboBox<>();
+
+        // Populate the categoryComboBox with some default categories
+        categoryComboBox.addItem("Food");
+        categoryComboBox.addItem("Utilities");
+        categoryComboBox.addItem("Transportation");
+        categoryComboBox.addItem("Entertainment");
+        categoryComboBox.addItem("Miscellaneous");
+
+        Font buttonFont = new Font(Font.SANS_SERIF, Font.BOLD, 16);
+
+        // Set font size for categoryComboBox
+        Font categoryFont = new Font(Font.SANS_SERIF, Font.PLAIN, 16);
+        categoryComboBox.setFont(categoryFont);
+
+        // Increase the size of "Choose Category" label
+        JLabel categoryLabel = new JLabel("Choose Category: ");
+        categoryLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
+
+        JButton addIncomeButton = new JButton("Add Income");
+        addIncomeButton.setBackground(new Color(204, 255, 204));
+        addIncomeButton.setPreferredSize(new Dimension(200, 40));
+        addIncomeButton.setFont(buttonFont);
+
+        JButton updateIncomeButton = new JButton("Update Income");
+        updateIncomeButton.setBackground(new Color(204, 255, 204));
+        updateIncomeButton.setPreferredSize(new Dimension(200, 40));
+        updateIncomeButton.setFont(buttonFont);
+
+        JButton addExpenseButton = new JButton("Add Expense");
+        addExpenseButton.setBackground(new Color(255, 204, 204));
+        addExpenseButton.setPreferredSize(new Dimension(200, 40));
+        addExpenseButton.setFont(buttonFont);
+
+        JButton displaySummaryButton = new JButton("Display Summary");
+        displaySummaryButton.setBackground(new Color(204, 204, 255));
+        displaySummaryButton.setPreferredSize(new Dimension(200, 40));
+        displaySummaryButton.setFont(buttonFont);
+
+        JButton displayTransactionsButton = new JButton("Display Transactions");
+        displayTransactionsButton.setBackground(new Color(255, 204, 153));
+        displayTransactionsButton.setPreferredSize(new Dimension(200, 40));
+        displayTransactionsButton.setFont(buttonFont);
+
+        JButton deleteTransactionButton = new JButton("Delete Transaction");
+        deleteTransactionButton.setBackground(new Color(255, 153, 204));
+        deleteTransactionButton.setPreferredSize(new Dimension(200, 40));
+        deleteTransactionButton.setFont(buttonFont);
+
+        JButton setBudgetButton = new JButton("Set Budget");
+        setBudgetButton.setBackground(new Color(255, 255, 153));
+        setBudgetButton.setPreferredSize(new Dimension(200, 40));
+        setBudgetButton.setFont(buttonFont);
+
+        JButton updateBudgetButton = new JButton("Update Budget");
+        updateBudgetButton.setBackground(new Color(255, 255, 153));
+        updateBudgetButton.setPreferredSize(new Dimension(200, 40));
+        updateBudgetButton.setFont(buttonFont);
+
+        JButton calculateRemainingAmountButton = new JButton("Calculate Remaining Amount");
+        calculateRemainingAmountButton.setBackground(new Color(153, 255, 255));
+        calculateRemainingAmountButton.setPreferredSize(new Dimension(300, 40));
+        calculateRemainingAmountButton.setFont(buttonFont);
+
+        JButton exportDataButton = new JButton("Export Data");
+        exportDataButton.setBackground(new Color(153, 255, 153));
+        exportDataButton.setPreferredSize(new Dimension(200, 40));
+        exportDataButton.setFont(buttonFont);
+
+        JButton importDataButton = new JButton("Import Data");
+        importDataButton.setBackground(new Color(255, 204, 102));
+        importDataButton.setPreferredSize(new Dimension(200, 40));
+        importDataButton.setFont(buttonFont);
+
+        JButton addCategoryButton = new JButton("Add Category");
+        addCategoryButton.setBackground(new Color(204, 204, 255));
+        addCategoryButton.setPreferredSize(new Dimension(200, 40));
+        addCategoryButton.setFont(buttonFont);
+
+        JButton exitButton = new JButton("Exit");
+        exitButton.setBackground(new Color(255, 204, 204));
+        exitButton.setPreferredSize(new Dimension(200, 40));
+        exitButton.setFont(buttonFont);
+
+        JButton userDetailsButton = new JButton("User Details");
+        userDetailsButton.setBackground(new Color(204, 255, 255));
+        userDetailsButton.setPreferredSize(new Dimension(200, 40));
+        userDetailsButton.setFont(buttonFont);
+
+        addIncomeButton.addActionListener(e -> addIncome());
+        updateIncomeButton.addActionListener(e -> updateIncome());
+        addExpenseButton.addActionListener(e -> addExpense());
+        displaySummaryButton.addActionListener(e -> displaySummary());
+        displayTransactionsButton.addActionListener(e -> displayTransactions());
+        deleteTransactionButton.addActionListener(e -> deleteTransaction());
+        setBudgetButton.addActionListener(e -> setBudget());
+        updateBudgetButton.addActionListener(e -> updateBudget());
+        calculateRemainingAmountButton.addActionListener(e -> calculateRemainingAmount());
+        exportDataButton.addActionListener(e -> exportData());
+        importDataButton.addActionListener(e -> importData());
+        addCategoryButton.addActionListener(e -> addCategory());
+        exitButton.addActionListener(e -> System.exit(0));
+        userDetailsButton.addActionListener(e -> setUserDetails());
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(addIncomeButton);
+        buttonPanel.add(updateIncomeButton);
+        buttonPanel.add(addExpenseButton);
+        buttonPanel.add(displaySummaryButton);
+        buttonPanel.add(displayTransactionsButton);
+        buttonPanel.add(deleteTransactionButton);
+        buttonPanel.add(setBudgetButton);
+        buttonPanel.add(updateBudgetButton);
+        buttonPanel.add(calculateRemainingAmountButton);
+        buttonPanel.add(exportDataButton);
+        buttonPanel.add(importDataButton);
+        buttonPanel.add(addCategoryButton);
+        buttonPanel.add(exitButton);
+        buttonPanel.add(userDetailsButton);
+
+        JPanel categoryPanel = new JPanel();
+        categoryPanel.add(new JLabel("Choose Category: "));
+        categoryPanel.add(categoryComboBox);
+
+        JScrollPane scrollPane = new JScrollPane(displayArea);
+
+        getContentPane().setLayout(new BorderLayout());
+        getContentPane().add(categoryPanel, BorderLayout.NORTH);
+        getContentPane().add(buttonPanel, BorderLayout.CENTER);
+        getContentPane().add(scrollPane, BorderLayout.SOUTH);
+
+        pack();
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    private void addIncome() {
+        String source = JOptionPane.showInputDialog("Enter source of income:");
+        String amountStr = JOptionPane.showInputDialog("Enter income amount:");
+        double amount = Double.parseDouble(amountStr);
+        expenseTracker.addIncome(amount, source, new Date());
+        displayTransactions();
+    }
+
+    private void updateIncome() {
+        String indexStr = JOptionPane.showInputDialog("Enter the index of the income to update:");
+        int index = Integer.parseInt(indexStr);
+        String newAmountStr = JOptionPane.showInputDialog("Enter new income amount:");
+        double newAmount = Double.parseDouble(newAmountStr);
+        expenseTracker.updateIncome(index, newAmount);
+        displayTransactions();
+    }
+
+    private void addExpense() {
+        String category = (String) categoryComboBox.getSelectedItem();
+        String amountStr = JOptionPane.showInputDialog("Enter expense amount:");
+        double amount = Double.parseDouble(amountStr);
+        expenseTracker.addExpense(category, amount, new Date());
+        displayTransactions();
+    }
+
+    private void displaySummary() {
+        StringBuilder summaryBuilder = new StringBuilder();
+        summaryBuilder.append(expenseTracker.getSummary()).append("\n\n");
+        summaryBuilder.append("------ Budget Summary ------\n");
+
+        // Iterate through the budget map to display budget and remaining amount for each category
+        for (Map.Entry<String, Double> entry : expenseTracker.budget.entrySet()) {
+            String category = entry.getKey();
+            double budgetAmount = entry.getValue();
+            double spentAmount = calculateSpentAmountForCategory(category);
+            double remainingAmount = budgetAmount - spentAmount;
+
+            // Append category and budget on the same line
+            summaryBuilder.append("Category: ").append(category).append(", Budget: Rs.").append(budgetAmount).append("\n");
+            // Append spent and remaining amounts on separate lines
+            summaryBuilder.append("Spent: Rs.").append(spentAmount).append(", Remaining: Rs.").append(remainingAmount).append("\n");
+            // Add a separator between entries
+            summaryBuilder.append("-----------------------------\n");
+        }
+
+        summaryBuilder.append("\n").append(expenseTracker.getUserDetails());
+        displayArea.setText(summaryBuilder.toString());
+    }
+
+
+    // Helper method to calculate the total amount spent for a given category
+    private double calculateSpentAmountForCategory(String category) {
+        double spentAmount = 0;
+        for (Transaction transaction : expenseTracker.transactions) {
+            if (transaction.type.startsWith("Expense - " + category)) {
+                spentAmount += Math.abs(transaction.amount); // Taking absolute value of expense amount
+            }
+        }
+        return spentAmount;
+    }
+
+    private void displayTransactions() {
+        StringBuilder transactionsBuilder = new StringBuilder();
+        transactionsBuilder.append("Index | Transaction                          | Amount | Date\n");
+        transactionsBuilder.append("--------------------------------------------------------------\n");
+
+        // Iterate through transactions and display each with an index number
+        for (int i = 0; i < expenseTracker.transactions.size(); i++) {
+            Transaction transaction = expenseTracker.transactions.get(i);
+            String index = String.format("%-6d", i); // Left-aligned index
+            String transactionInfo = String.format("%-37s", transaction.type);
+            String amount = String.format("%.2f", Math.abs(transaction.amount)); // Absolute value of amount
+            String date = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(transaction.date);
+            transactionsBuilder.append(index).append("| ").append(transactionInfo).append("| ").append(amount).append(" | ").append(date).append("\n");
+        }
+
+        displayArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 16)); // Set font and size
+        displayArea.setText(transactionsBuilder.toString());
+    }
+
+
+    private void deleteTransaction() {
+        String indexStr = JOptionPane.showInputDialog("Enter the index of the transaction to delete:");
+        int index = Integer.parseInt(indexStr);
+        expenseTracker.deleteTransaction(index);
+        displayTransactions();
+    }
+
+    private void setBudget() {
+        String category = (String) categoryComboBox.getSelectedItem();
+        String budgetStr = JOptionPane.showInputDialog("Enter budget for category '" + category + "':");
+        double budgetAmount = Double.parseDouble(budgetStr);
+        expenseTracker.setBudget(category, budgetAmount);
+        JOptionPane.showMessageDialog(this, "Budget set successfully for category '" + category + "'");
+    }
+
+    private void updateBudget() {
+        String category = (String) categoryComboBox.getSelectedItem();
+        String budgetStr = JOptionPane.showInputDialog("Enter new budget for category '" + category + "':");
+        double budgetAmount = Double.parseDouble(budgetStr);
+        expenseTracker.setBudget(category, budgetAmount);
+        JOptionPane.showMessageDialog(this, "Budget updated successfully for category '" + category + "'");
+    }
+
+    private void calculateRemainingAmount() {
+        StringBuilder remainingAmountBuilder = new StringBuilder();
+        remainingAmountBuilder.append("------ Remaining Amount ------\n");
+
+        // Iterate through the budget map to calculate remaining amount for each category
+        for (Map.Entry<String, Double> entry : expenseTracker.budget.entrySet()) {
+            String category = entry.getKey();
+            double budgetAmount = entry.getValue();
+            double spentAmount = calculateSpentAmountForCategory(category);
+            double remainingAmount = budgetAmount - spentAmount;
+            remainingAmountBuilder.append("Category: ").append(category)
+                    .append(", Remaining: Rs.").append(remainingAmount)
+                    .append("\n");
+        }
+
+        remainingAmountBuilder.append("-----------------------------");
+        JOptionPane.showMessageDialog(this, remainingAmountBuilder.toString());
+    }
+
+    private void exportData() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select a file to export data");
+        int userSelection = fileChooser.showSaveDialog(this);
+        if (userSelection == JFileChooser.APPROVE_OPTION) {
+            File fileToSave = fileChooser.getSelectedFile();
+            expenseTracker.exportDataToCSV(fileToSave.getAbsolutePath());
+        }
+    }
+
+    private void importData() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select a file to import data");
+        int userSelection = fileChooser.showOpenDialog(this);
+        if (userSelection == JFileChooser.APPROVE_OPTION) {
+            File fileToImport = fileChooser.getSelectedFile();
+            expenseTracker.importData(fileToImport.getAbsolutePath());
+            displayTransactions();
+        }
+    }
+
+    private void addCategory() {
+        String newCategory = JOptionPane.showInputDialog("Enter new category:");
+        if (newCategory != null && !newCategory.isEmpty()) {
+            DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) categoryComboBox.getModel();
+            model.addElement(newCategory);
+        }
+    }
+
+    private void setUserDetails() {
+        String name = JOptionPane.showInputDialog("Enter your name:");
+        String email = JOptionPane.showInputDialog("Enter your email:");
+        expenseTracker.setUserDetails(name, email);
+        JOptionPane.showMessageDialog(this, "User details set successfully.");
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(ExpenseTrackerApp::new);
+    }
+}
